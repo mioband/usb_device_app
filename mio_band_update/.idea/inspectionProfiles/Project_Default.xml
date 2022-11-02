@@ -1,0 +1,36 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <value>
+          <list size="15">
+            <item index="0" class="java.lang.String" itemvalue="greenlet" />
+            <item index="1" class="java.lang.String" itemvalue="pamqp" />
+            <item index="2" class="java.lang.String" itemvalue="zope.interface" />
+            <item index="3" class="java.lang.String" itemvalue="watchdog-gevent" />
+            <item index="4" class="java.lang.String" itemvalue="httpx-auth" />
+            <item index="5" class="java.lang.String" itemvalue="prometheus-client" />
+            <item index="6" class="java.lang.String" itemvalue="aiormq" />
+            <item index="7" class="java.lang.String" itemvalue="watchdog" />
+            <item index="8" class="java.lang.String" itemvalue="multidict" />
+            <item index="9" class="java.lang.String" itemvalue="dramatiq" />
+            <item index="10" class="java.lang.String" itemvalue="gevent" />
+            <item index="11" class="java.lang.String" itemvalue="yarl" />
+            <item index="12" class="java.lang.String" itemvalue="pika" />
+            <item index="13" class="java.lang.String" itemvalue="zope.event" />
+            <item index="14" class="java.lang.String" itemvalue="django-dramatiq" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPep8Inspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
+      <option name="ignoredErrors">
+        <list>
+          <option value="W292" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>
