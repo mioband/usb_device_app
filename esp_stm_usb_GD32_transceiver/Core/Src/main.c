@@ -50,7 +50,6 @@
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 
-UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_usart3_tx;
 
@@ -68,7 +67,6 @@ volatile uint8_t tim_1_flag = 0;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_USART1_UART_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_TIM2_Init(void);
@@ -161,43 +159,48 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_USART1_UART_Init();
   MX_USB_DEVICE_Init();
   MX_DMA_Init();
   MX_USART3_UART_Init();
   MX_TIM2_Init();
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
-//  NVIC_SystemReset();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-//  HAL_UART_Receive_IT(&huart1, (uint8_t *)UserTxBufferFS, 1); // !!!!!!!!!!!!!!!
   HAL_Delay(1000);
   HAL_UART_Receive_IT(&huart3, (uint8_t *)UserTxBufferFS, 1);
   __HAL_TIM_CLEAR_FLAG(&htim2, TIM_SR_UIF);
   HAL_TIM_Base_Start_IT(&htim2);
   while (1) {
-	  if (UserRxBufferFS[0] == 'F' && UserRxBufferFS[1] == 'A' && UserRxBufferFS[2] == '\n') {
+	  if (UserRxBufferFS[0] == 'F' && UserRxBufferFS[1] == 'A' && UserRxBufferFS[3] == '\n') {
+		  switch (UserRxBufferFS[2]) {
+		  	  case 'A':
+		  	  case 'B':
+		  		  __HAL_TIM_SET_AUTORELOAD(&htim1, 65535); // about 90 seconds
+		  		  break;
+		  	  case 'C':
+		  		  __HAL_TIM_SET_AUTORELOAD(&htim1, 43946); // 60 seconds
+		  		  break;
+		  	  case 'D':
+		  		  __HAL_TIM_SET_AUTORELOAD(&htim1, 21973); // 30 seconds
+		  		  break;
+		  }
+
 		  LED_ON();
 		  RESET_OFF();
 		  BOOT_OFF();
 		  HAL_Delay(250);
 		  RESET_ON();
 
-//		  __HAL_TIM_CLEAR_FLAG(&htim1, TIM_SR_UIF);
-//		  HAL_TIM_Base_Start_IT(&htim1);
-//		  while (tim_1_flag == 0);
-//		  tim_1_flag = 0;
 
-		  USBD_CDC_HandleTypeDef *usb_hcdc = (USBD_CDC_HandleTypeDef*)hUsbDeviceFS.pClassData;
-		  do {
-			  __HAL_TIM_CLEAR_FLAG(&htim1, TIM_SR_UIF);
-			  HAL_TIM_Base_Start_IT(&htim1);
-			  while (tim_1_flag == 0);
-			  tim_1_flag = 0;
-		  } while (usb_hcdc->RxState != 0);
+		  __HAL_TIM_CLEAR_FLAG(&htim1, TIM_SR_UIF);
+		  HAL_TIM_Base_Start_IT(&htim1);
+		  while (tim_1_flag == 0);
+		  tim_1_flag = 0;
+
 
 		  BOOT_ON();
 		  RESET_OFF();
@@ -232,7 +235,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -246,12 +249,12 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB;
-  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL_DIV1_5;
+  PeriphClkInit.UsbClockSelection = RCC_USBCLKSOURCE_PLL;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -277,9 +280,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 65535/*59999*/;
+  htim1.Init.Prescaler = 65535;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 65535/*35999*/;
+  htim1.Init.Period = 65535;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -323,9 +326,9 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 59999;
+  htim2.Init.Prescaler = 23999;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 5;
+  htim2.Init.Period = 4;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -346,39 +349,6 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
-
-}
-
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_USART1_UART_Init(void)
-{
-
-  /* USER CODE BEGIN USART1_Init 0 */
-
-  /* USER CODE END USART1_Init 0 */
-
-  /* USER CODE BEGIN USART1_Init 1 */
-
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN USART1_Init 2 */
-
-  /* USER CODE END USART1_Init 2 */
 
 }
 
