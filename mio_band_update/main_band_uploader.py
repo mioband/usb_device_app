@@ -50,7 +50,18 @@ class ConnectorUploader(Band_uploader):
         try:
             connection = serial.Serial(port, baudrate=115200, bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE,
                                        stopbits=serial.STOPBITS_ONE, timeout=1, write_timeout=20)
-            connection.write(bytearray('FA\n', encoding='utf-8'))
+            # connection.write(bytearray('FA\n', encoding='utf-8'))
+
+            with open(new_esp_file, 'rb') as f:
+                f_size = len(f.read())
+                if f_size > 1000000:
+                    connection.write(bytearray('FAA\n', encoding='utf-8'))  # send 2 mins
+                elif f_size > 600000:
+                    connection.write(bytearray('FAB\n', encoding='utf-8'))  # send 1.5 mins
+                elif f_size > 400000:
+                    connection.write(bytearray('FAC\n', encoding='utf-8'))  # send 1 min
+                elif f_size > 200000:
+                    connection.write(bytearray('FAD\n', encoding='utf-8'))  # send 0.5 min
             connection.close()
         except serial.SerialException as err:
             print(err)
@@ -63,6 +74,10 @@ class ConnectorUploader(Band_uploader):
 
 
 if __name__ == '__main__':
+    # test_num = '1'
     band_up = ConnectorUploader()
     band_up.check_update(False, True)
-    band_up.esp_upload('COM12', './firmwares/firmware.bin')  # 'COM12' - case of the port name and number, they can be different
+    # band_up.esp_upload('COM30', './firmwares/firmware_test_' + test_num + '.bin')
+    # band_up.esp_upload('COM37', './firmwares/firmware.bin')  # загрузка файла с возможностью отправлять сигналы|
+    # на браслет
+    band_up.esp_upload('COM36', './firmwares/firmware.bin')
