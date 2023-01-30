@@ -1,10 +1,10 @@
+/*
+ * For games testing with TWO bracelets
+*/
 #include <Arduino.h>
 #include "BLEDevice.h"
 
 
-// #define NRF_DEBUG
-
-#define bleServerName "LARS_Bracelet"
 #define LED_RESOLUTION 10
 #define LED_FREQ       1
 #define LED_1_CH       0
@@ -13,29 +13,37 @@
 #define LED_2          GPIO_NUM_32 // green
 
 
-void indicating(void);
-bool connectToServer(void);
+bool connect_to_ble_server(void);
 static void bleStringNotifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify);
+void BLE_enable(void);
 
 
+/* BLE stuff */
 static bool doConnect = false; // переменная, используемая для определения того, нужно ли начинать подключение или завершено ли подключение
-volatile bool connected = false;
-#ifdef NRF_DEBUG
-volatile uint8_t board_mode = 0xFF;
-#endif
+volatile bool connected[] = {false, false};
+char ble_server_name[2][11] = {"Bracelet_1", "Bracelet_2"};
+
 
 static BLEUUID bleServiceUUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E"); // UUID сервиса
 static BLEUUID bleStringCharacteristicUUID("6E400003-B5A3-F393-E0A9-E50E24DCCA9E"); // UUID для (данные одной строчки)
 static BLERemoteCharacteristic* bleStringCharacteristic; // характеристики, данные которых необходимо считать
-BLEClient* pClient = BLEDevice::createClient();
-static BLEAdvertisedDevice* bracelet_server;
+BLEClient* pClient[] = {BLEDevice::createClient(), BLEDevice::createClient()};
+static BLEAdvertisedDevice* bracelet_server[2];
+volatile uint8_t ble_connected_devices_count = 0;
 
 
 class ClientCallback : public BLEClientCallbacks {
     void onConnect(BLEClient* pclient) {}
 
     void onDisconnect(BLEClient* pclient) {
-        connected = false;
+        if (pclient == pClient[0]) {
+            ble_connected_devices_count = 0;
+            connected[0] = false;
+            ledcWrite(LED_1_CH, 240);
+        } else if (pclient == pClient[1]) {
+            connected[1] = false;
+            ledcWrite(LED_2_CH, 512);
+        }
     }
 };
 
@@ -43,10 +51,10 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks {
     /** @brief Метод обратного вызова, который будет вызван при получении оповещения от другого устройства
      */
     void onResult(BLEAdvertisedDevice advertisedDevice) {
-        if (advertisedDevice.getName() == bleServerName) {
-            connected = true;
+        if (advertisedDevice.getName() == ble_server_name[ble_connected_devices_count]) {
+            connected[ble_connected_devices_count] = true;
             BLEDevice::getScan()->stop();
-            bracelet_server = new BLEAdvertisedDevice(advertisedDevice);
+            bracelet_server[ble_connected_devices_count] = new BLEAdvertisedDevice(advertisedDevice);
             doConnect = true; // задаем индикатор, дающий понять, что мы готовы подключиться
         }
     }
@@ -70,7 +78,6 @@ typedef struct {
 
 
 void setup() {
-    char input_buf[3];
     Serial.begin(115200);
     while (!Serial);
 
@@ -82,64 +89,33 @@ void setup() {
     ledcWrite(LED_1_CH, 240);
     ledcWrite(LED_2_CH, 512);
 
-#ifdef NRF_DEBUG
-    while (board_mode == 0xFF) {
-        if (Serial.read() == 0x7E) { // '~'
-            Serial.readBytes(input_buf, 3);
-            if (!strcmp(input_buf, "DBG")) {
-                indicating();
-                board_mode = 1;
-            } else if (!strcmp(input_buf, "NRM")) {
-                indicating();
-                board_mode = 0;
-            }
-        }
-    }
-#endif
-
-    ledcWrite(LED_1_CH, 240);
-    ledcWrite(LED_2_CH, 512);
-
-    // инициализируем BLE-устройство
-    BLEDevice::init("ESP32_Client");
-    /* Setting the new tx power */
-    if (esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9) == ESP_FAIL) {
-        Serial.println("Tx power set failed");
-    }
-
-    BLEScan* pBLEScan = BLEDevice::getScan();
-    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
-    pBLEScan->setActiveScan(true);
-    pBLEScan->setInterval(100);
-    pBLEScan->setWindow(99);
-    pBLEScan->start(5, false);
+    BLE_enable();
 }
 
 
 void loop() {
     if (doConnect) {
-        if (connectToServer()) { // подключение к серверу        
-            ledcWrite(LED_2_CH, 1024);
-            ledcWrite(LED_1_CH, 0);
+        if (connect_to_ble_server()) { // подключение к серверу
+            switch (ble_connected_devices_count) {
+                case 0:
+                    ledcWrite(LED_1_CH, 1024);
+                    break;
+                case 1:
+                    ledcWrite(LED_2_CH, 1024);
+                    break;
+            }
         } else {
-            Serial.println("We have failed to connect to the server; Restart your device to scan for nearby BLE server again.");
-            //  "Подключиться к серверу не получилось.
-            ledcWrite(LED_1_CH, 160);
-            ledcWrite(LED_2_CH, 160);
+            // Подключиться к BLE-серверу не получилось
+            Serial.println("Connection failed");
         }
-        doConnect = false;
-    } else if (!connected) {
-        ledcWrite(LED_1_CH, 240);
-        ledcWrite(LED_2_CH, 512);
-        BLEDevice::getScan()->start(0);
-    }
+        doConnect = false; 
+    } else if ((connected[0] & connected[1]) != true) BLEDevice::getScan()->start(0);
 }
+
+
 /****************************************************************************************************************************/
 
 static void bleStringNotifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify) {
-#ifdef NRF_DEBUG
-    if (!board_mode) {
-#endif
         switch ((*pData) & 0xFE) {
             case 0x50: // info about charge
                 Serial.print(*pData); // device id + message id
@@ -148,10 +124,11 @@ static void bleStringNotifyCallback(BLERemoteCharacteristic* pBLERemoteCharacter
                 Serial.println(',');
                 break;
             case 0x90: { // info about buttons and gestures
+                    Serial.print(*pData); Serial.print(','); // idx
                     uint8_t gesture_buttons = *(++pData);
                     Serial.print(gesture_buttons & 0x01); Serial.print(',');
-                    Serial.print(gesture_buttons & 0x02); Serial.print(',');
-                    Serial.print(gesture_buttons & 0x04); Serial.println(',');
+                    Serial.print((gesture_buttons & 0x02) >> 1); Serial.print(',');
+                    Serial.print((gesture_buttons & 0x04) >> 2); Serial.println(',');
                 }
                 break;
             case 0x30: { // for only two accelerations
@@ -174,31 +151,22 @@ static void bleStringNotifyCallback(BLERemoteCharacteristic* pBLERemoteCharacter
                     Serial.print(tmp_struct.w_z); Serial.println(',');
                 }
         }
-#ifdef NRF_DEBUG
-    } else if (board_mode == 1) {
-        char tmp[50];
-        memset(tmp, 0, sizeof(tmp));
-        memcpy(tmp, pData, length);
-        Serial.print(tmp);
-    }
-#endif
-}
-
-void indicating(void) {
-    ledcWrite(LED_1_CH, 1024);
-    ledcWrite(LED_2_CH, 1024);
-    delay(1100);
 }
 
 /**
  * @brief Подключение к BLE-серверу
  * @retval Статус подключения
  */
-bool connectToServer(void) {
-    pClient->setClientCallbacks(new ClientCallback()); /****************************/
+bool connect_to_ble_server(void) {
+    BLEClient* ptr_client_bracelet;
 
-    pClient->connect(bracelet_server);
-    BLERemoteService* pRemoteService = pClient->getService(bleServiceUUID); // считываем UUID искомого сервиса
+    ptr_client_bracelet = pClient[ble_connected_devices_count];
+    ptr_client_bracelet->setClientCallbacks(new ClientCallback());
+    ptr_client_bracelet->connect(bracelet_server[ble_connected_devices_count]);
+
+    if (++ble_connected_devices_count > 1) ble_connected_devices_count = 1;
+
+    BLERemoteService* pRemoteService = ptr_client_bracelet->getService(bleServiceUUID); // считываем UUID искомого сервиса
 
     if (pRemoteService == nullptr) {
         return false;
@@ -213,4 +181,23 @@ bool connectToServer(void) {
 
     bleStringCharacteristic->registerForNotify(bleStringNotifyCallback);
     return true;
+}
+
+/**
+ * @brief Инициализация BLE-клиента, сканирование для подключения к BLE-серверу
+ */
+void BLE_enable(void) {
+    // инициализируем BLE-устройство
+    BLEDevice::init("ESP32_Client");
+    /* Setting the new tx power */
+    if (esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_SCAN, ESP_PWR_LVL_P9) == ESP_FAIL) {
+        Serial.println("Tx power set failed");
+    }
+
+    BLEScan* pBLEScan = BLEDevice::getScan();
+    pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+    pBLEScan->setActiveScan(true);
+    pBLEScan->setInterval(100);
+    pBLEScan->setWindow(99);
+    pBLEScan->start(5, false);
 }
